@@ -1,9 +1,9 @@
-#!/usr/bin/env python2
+#!/usr/bin/env python3
 #
 # Check Xdmf file against referenced HDF5 files.
 #
-# Paul E.C. Melis <paul.melis@surfsara.nl>
-# SURFsara Visualization group
+# Paul E.C. Melis <paul.melis@surf.nl>
+# SURF High-Performance Computing & Visualization group
 #
 # Limitations:
 # - Checks DataItem elements referencing an HDF5 file only
@@ -14,7 +14,7 @@
 #   for every dataset check
 #
 #
-# Copyright (c) 2015, SURFsara BV
+# Copyright (c) 2015-2023 SURF BV
 # All rights reserved.
 #
 # Redistribution and use in source and binary forms, with or without 
@@ -48,29 +48,29 @@
 
 import sys, os, re, traceback
 import h5py
-import lxml.etree as ET
+import xml.etree.ElementTree as ET
 
 VERBOSE = False
 
 def check_dataitem_hdf(elem, xdmf_number_type, xdmf_precision, xdmf_dimensions):
-    
-    text = elem.text        
+
+    text = elem.text
     text = text.strip()     # XXX what does the spec say we should handle whitespace here?
-    
+
     pat = re.compile('^(.*):(/.*)$')
     m = pat.search(text)
     if not m:
-        print '(%s:%d) Failed to match file:dataset pattern in "%s"' % (xmffile, elem.sourceline, text)
+        print('(%s:%d) Failed to match file:dataset pattern in "%s"' % (xmffile, elem.sourceline, text))
         return
 
     hdf5_file = m.group(1)
     dataset_path = m.group(2)
 
     if VERBOSE:
-        print 'Checking file "%s" for dataset "%s", numbertype "%s", precision "%d", dimensions "%s" ' % (fname, dataset_path, xdmf_number_type, xdmf_precision, ' '.join(xdmf_dimensions))
+        print('Checking file "%s" for dataset "%s", numbertype "%s", precision "%d", dimensions "%s" ' % (fname, dataset_path, xdmf_number_type, xdmf_precision, ' '.join(xdmf_dimensions)))
 
     if not os.path.exists(hdf5_file):
-        print '(%s:%d) Referenced HDF5 file %s does not exist' % (xmffile, elem.sourceline, hdf5_file)
+        print('(%s:%d) Referenced HDF5 file %s does not exist' % (xmffile, elem.sourceline, hdf5_file))
         return
 
     f = h5py.File(hdf5_file, 'r')
@@ -92,32 +92,37 @@ def check_dataitem_hdf(elem, xdmf_number_type, xdmf_precision, xdmf_dimensions):
 
         if xdmf_datatype != '':
             if xdmf_datatype != dataset_datatype:
-                print '(%s:%d) Data types in Xdmf (%s, %d) and HDF5 file (%s) don\'t match' % (xmffile, elem.sourceline, xdmf_number_type, xdmf_precision, dataset_datatype)
+                # XXX yuck, elem.sourceline no longer available in Python 3
+                #print('(%s:%d) Data types in Xdmf (%s, %d) and HDF5 file (%s) don\'t match' % (xmffile, elem.sourceline, xdmf_number_type, xdmf_precision, dataset_datatype))
+                print('(%s) Data types in Xdmf (%s, %d) and HDF5 file (%s) don\'t match' % (xmffile, xdmf_number_type, xdmf_precision, dataset_datatype))
 
         # Check rank and shape
 
         dataset_shape = dset.shape
         dataset_rank = len(dataset_shape)
-        
+
         xdmf_rank = len(xdmf_dimensions)
-        
+
         dim_ok = True
 
         if xdmf_rank == dataset_rank:
-            for i in xrange(xdmf_rank):
+            for i in range(xdmf_rank):
                 if dataset_shape[i] != xdmf_dimensions[i]:
                     dim_ok = False
                     break
         else:
             dim_ok = False
-                    
+
         if not dim_ok:
-            print '(%s:%d) Dimensions in Xdmf %s and HDF5 file %s don\'t match' % (xmffile, elem.sourceline, tuple(xdmf_dimensions), tuple(dataset_shape))
+            #print('(%s:%d) Dimensions in Xdmf %s and HDF5 file %s don\'t match' % (xmffile, elem.sourceline, tuple(xdmf_dimensions), tuple(dataset_shape)))
+            print('(%s) Dimensions in Xdmf %s and HDF5 file %s don\'t match' % (xmffile, tuple(xdmf_dimensions), tuple(dataset_shape)))
 
     except KeyError:
-        print '(%s:%d) Dataset "%s" not found in HDF5 file %s' % (xmffile, elem.sourceline, dataset_path, hdf5_file)
+        #print('(%s:%d) Dataset "%s" not found in HDF5 file %s' % (xmffile, elem.sourceline, dataset_path, hdf5_file))
+        print('(%s) Dataset "%s" not found in HDF5 file %s' % (xmffile, dataset_path, hdf5_file))
     except:
-        print '(%s:%d) Exception during HDF5 processing' % (xmffile, elem.sourceline)
+        #print('(%s:%d) Exception during HDF5 processing' % (xmffile, elem.sourceline))
+        print('(%s) Exception during HDF5 processing' % (xmffile,))
         traceback.print_exc()
 
     f.close()
@@ -133,7 +138,7 @@ def check_dataitem(elem):
     #endian = 'Native'
     #compression = 'raw'
     #seek = 0
-    
+
     # Check attributes
 
     if 'NumberType' in elem.attrib:
@@ -146,40 +151,45 @@ def check_dataitem(elem):
         format = elem.attrib['Format']
 
     if 'Dimensions' not in elem.attrib:
-        print '(%s:%d) no dimensions in DataItem element!' % (xmffile, elem.sourceline)
-        return        
-            
+        #print('(%s:%d) no dimensions in DataItem element!' % (xmffile, elem.sourceline))
+        print('(%s) no dimensions in DataItem element!' % (xmffile,))
+        return
+
     # Check values
-    
+
     if number_type not in ['Float', 'Int', 'UInt', 'Char', 'UChar']:
-        print '(%s:%d) Invalid NumberType "%s" specified' % (xmffile, elem.sourceline, number_type)
-        
-    if precision not in [1, 2, 4, 8]:        
-        print '(%s:%d) Invalid Precision %d specified' % (xmffile, elem.sourceline, precision)        
+        #print('(%s:%d) Invalid NumberType "%s" specified' % (xmffile, elem.sourceline, number_type))
+        print('(%s) Invalid NumberType "%s" specified' % (xmffile, number_type))
+
+    if precision not in [1, 2, 4, 8]:
+        #print('(%s:%d) Invalid Precision %d specified' % (xmffile, elem.sourceline, precision))
+        print('(%s) Invalid Precision %d specified' % (xmffile, precision))
     elif precision == 2:
         if number_type not in ['Int', 'UInt']:
-            print '(%s:%d) Precision 2 only allowed for NumberType "Int" and "UInt"' % (xmffile, elem.sourceline)        
-            
+            #print('(%s:%d) Precision 2 only allowed for NumberType "Int" and "UInt"' % (xmffile, elem.sourceline))
+            print('(%s) Precision 2 only allowed for NumberType "Int" and "UInt"' % (xmffile,))
+
     if format not in ['XML', 'HDF', 'Binary']:
-        print '(%s:%d) Invalid Format "%s" specified' % (xmffile, elem.sourceline, format)        
-            
+        #print('(%s:%d) Invalid Format "%s" specified' % (xmffile, elem.sourceline, format))
+        print('(%s) Invalid Format "%s" specified' % (xmffile, format))
+
     dimensions = elem.attrib['Dimensions']
-    dimensions = map(int, dimensions.split())
-    
+    dimensions = list(map(int, dimensions.split()))
+
     #assert endian in ['Native', 'Big', 'Little']       # only with Format == Binary
-    #assert compression in ['Raw', 'Zlib', 'BZip2']     # XXX        
+    #assert compression in ['Raw', 'Zlib', 'BZip2']     # XXX
 
     # Process
-            
-    if format == 'HDF':     
-        check_dataitem_hdf(elem, number_type, precision, dimensions)                    
+    if format == 'HDF':
+        check_dataitem_hdf(elem, number_type, precision, dimensions)
     else:
-        print '(%s:%d) Ignoring DataItem element having format "%s"' % (xmffile, elem.sourceline, format)
+        #print('(%s:%d) Ignoring DataItem element having format "%s"' % (xmffile, elem.sourceline, format))
+        print('(%s) Ignoring DataItem element having format "%s"' % (xmffile, format))
 
 
 xmffile = sys.argv[1]
 if not os.path.isfile(xmffile):
-    print 'File %s not found' % xmffile
+    print('File %s not found' % xmffile)
     sys.exit(-1)
 
 tree = ET.parse(xmffile)
@@ -187,9 +197,9 @@ tree = ET.parse(xmffile)
 root = tree.getroot()
 
 if root.tag != 'Xdmf':
-    print 'Root tag of %s is no "Xdmf"!' % xmffile
+    print('Root tag of %s is not "Xdmf"!' % xmffile)
     sys.exit(-1)
-    
+
 for elem in root.findall('.//DataItem'):
     check_dataitem(elem)
 
